@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.mypy_cache/
+.pytest_cache/
+backend/.venv
+backend/.env
+python*
+
+# Node/Next.js (Frontend)
+node_modules/
+.next/
+dist/
+build/
+frontend/.venv
+frontend/.env
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+*.log
+*.bak
+*.tmp

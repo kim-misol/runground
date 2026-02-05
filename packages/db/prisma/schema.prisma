@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum ClassType {
+  HYBRID
+  ONLINE_ONLY
+}
+
+enum MemberRole {
+  OWNER_COACH
+  STAFF_PACER
+  STAFF_PHOTO
+  RUNNER
+}
+
+enum SessionType {
+  OFFLINE
+  ONLINE_TASK
+}
+
+model User {
+  id            String           @id @default(uuid())
+  email         String           @unique
+  name          String
+  role          UserRole         @default(USER)
+  isCoach       Boolean          @default(false)
+  memberships   ClassMember[]
+  records       ActivityRecord[]
+  subscriptions Subscription[]
+  deletedAt     DateTime?
+  createdAt     DateTime         @default(now())
+}
+
+model Subscription {
+  id        String   @id @default(uuid())
+  userId    String
+  planName  String
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(true)
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Class {
+  id          String        @id @default(uuid())
+  title       String
+  type        ClassType
+  description String?
+  members     ClassMember[]
+  curriculums Curriculum[]
+  feeds       Feed[]
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+}
+
+model ClassMember {
+  id       String     @id @default(uuid())
+  userId   String
+  classId  String
+  role     MemberRole @default(RUNNER)
+  level    String?
+  status   String     @default("ACTIVE")
+  joinedAt DateTime   @default(now())
+  user     User       @relation(fields: [userId], references: [id])
+  class    Class      @relation(fields: [classId], references: [id])
+
+  @@unique([userId, classId])
+}
+
+model Curriculum {
+  id         String    @id @default(uuid())
+  classId    String
+  weekNumber Int
+  startDate  DateTime?
+  sessions   Session[]
+  class      Class     @relation(fields: [classId], references: [id])
+}
+
+model Session {
+  id             String           @id @default(uuid())
+  curriculumId   String
+  dayOfWeek      Int
+  type           SessionType
+  title          String
+  description    String
+  location       String?
+  meetTime       DateTime?
+  targetDistance Float?
+  targetDuration Int?
+  records        ActivityRecord[]
+  curriculum     Curriculum       @relation(fields: [curriculumId], references: [id])
+}
+
+model ActivityRecord {
+  id            String   @id @default(uuid())
+  userId        String
+  sessionId     String?
+  distance      Float
+  duration      Int
+  avgPace       Int
+  mediaUrls     String[]
+  comment       String?
+  coachFeedback String?
+  isVerified    Boolean  @default(false)
+  user          User     @relation(fields: [userId], references: [id])
+  session       Session? @relation(fields: [sessionId], references: [id])
+  createdAt     DateTime @default(now())
+}
+
+model Feed {
+  id        String   @id @default(uuid())
+  classId   String
+  authorId  String
+  content   String
+  imageUrls String[]
+  createdAt DateTime @default(now())
+  class     Class    @relation(fields: [classId], references: [id])
+}

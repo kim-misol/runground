@@ -1,0 +1,22 @@
+{
+  "name": "runground",
+  "private": true,
+  "packageManager": "pnpm@10.28.2",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "db:generate": "pnpm --filter @runground/db db:generate",
+    "db:push": "pnpm --filter @runground/db db:push"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "prisma": "5.21.1",
+      "@prisma/client": "5.21.1"
+    }
+  }
+}
