@@ -7,123 +7,419 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  ADMIN
-  USER
+model User {
+  id           String     @id @default(cuid())
+  email        String?    @unique
+  passwordHash String?
+  globalRole   GlobalRole @default(USER)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  profile       UserProfile?
+  identities    UserIdentity[]
+  memberships   ClassMembership[]
+  activity      ActivityRecord[]
+  Class         Class[]
+  TrainingEvent TrainingEvent[]
+  CoachFeedback CoachFeedback[]
+  Post          Post[]
+  Comment       Comment[]
 }
 
-enum ClassType {
+model UserProfile {
+  userId    String  @id
+  user      User    @relation(fields: [userId], references: [id])
+  name      String?
+  phone     String?
+  instagram String?
+}
+
+model UserIdentity {
+  id         String       @id @default(cuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id])
+  provider   AuthProvider
+  providerId String
+  createdAt  DateTime     @default(now())
+
+  @@unique([provider, providerId])
+  @@index([userId])
+}
+
+model Class {
+  id          String    @id @default(cuid())
+  mode        ClassMode
+  title       String
+  intro       String?
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+
+  memberships ClassMembership[]
+  invitations ClassInvitation[]
+  events      TrainingEvent[]
+  templates   TrainingTemplateItem[]
+  posts       Post[]
+}
+
+model ClassMembership {
+  id      String @id @default(cuid())
+  classId String
+  userId  String
+  class   Class  @relation(fields: [classId], references: [id])
+  user    User   @relation(fields: [userId], references: [id])
+
+  role         ClassRole
+  staffRole    StaffRole?
+  memberStatus MemberStatus @default(ACTIVE)
+
+  runnerLevel String? // 클래스별 레벨 (예: beginner/intermediate/advanced)
+  runnerGoal  String? // 클래스별 목표
+
+  joinedAt DateTime @default(now())
+
+  @@unique([classId, userId])
+  @@index([userId])
+}
+
+model ClassInvitation {
+  id      String @id @default(cuid())
+  classId String
+  class   Class  @relation(fields: [classId], references: [id])
+
+  email            String
+  role             ClassRole
+  staffRole        StaffRole?
+  token            String     @unique
+  expiresAt        DateTime
+  acceptedAt       DateTime?
+  acceptedByUserId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([classId, email])
+}
+
+/// 오프라인 세션 
+model TrainingEvent {
+  id      String @id @default(cuid())
+  classId String
+  class   Class  @relation(fields: [classId], references: [id])
+
+  kind     TrainingKind // OFFLINE_SESSION or ONLINE_TASK(특별)
+  title    String
+  startsAt DateTime?
+  endsAt   DateTime?
+  location String?
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  details  TrainingDetail[]
+  votes    AttendanceVote[]
+  progress TrainingProgress[]
+  media    MediaAsset[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([classId, startsAt])
+}
+
+/// 숙제 
+model TrainingTemplateItem {
+  id      String @id @default(cuid())
+  classId String
+  class   Class  @relation(fields: [classId], references: [id])
+
+  weekIndex   Int
+  dayOffset   Int // 0~6
+  type        TrainingType
+  title       String?
+  description String?
+
+  // 목표치
+  targetDistanceKm   Float?
+  targetDurationMin  Int?
+  targetPaceSecPerKm Int?
+
+  progress TrainingProgress[]
+
+  @@index([classId, weekIndex, dayOffset])
+}
+
+model TrainingDetail {
+  id      String        @id @default(cuid())
+  eventId String
+  event   TrainingEvent @relation(fields: [eventId], references: [id])
+
+  section String // warmup/main/cooldown (enum으로 바꿔도 됨)
+  order   Int
+  type    TrainingType
+  note    String?
+
+  distanceKm  Float?
+  durationMin Int?
+  reps        Int?
+  sets        Int?
+
+  @@index([eventId, section])
+}
+
+model AttendanceVote {
+  id      String        @id @default(cuid())
+  eventId String
+  userId  String
+  event   TrainingEvent @relation(fields: [eventId], references: [id])
+
+  status    AttendanceStatus
+  updatedAt DateTime         @updatedAt
+
+  @@unique([eventId, userId])
+}
+
+model TrainingProgress {
+  id      String @id @default(cuid())
+  userId  String
+  classId String
+
+  eventId        String?
+  templateItemId String?
+
+  status                 ProgressStatus        @default(NOT_STARTED)
+  note                   String?
+  completedAt            DateTime?
+  TrainingEvent          TrainingEvent?        @relation(fields: [trainingEventId], references: [id])
+  trainingEventId        String?
+  TrainingTemplateItem   TrainingTemplateItem? @relation(fields: [trainingTemplateItemId], references: [id])
+  trainingTemplateItemId String?
+
+  @@index([userId, classId])
+  @@index([eventId])
+  @@index([templateItemId])
+}
+
+model ActivityRecord {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  classId        String?
+  eventId        String?
+  templateItemId String?
+
+  provider        ActivityProvider
+  externalId      String?
+  startedAt       DateTime
+  durationSec     Int?
+  distanceM       Int?
+  avgPaceSecPerKm Int?
+  avgHr           Int?
+  calories        Int?
+  rawJson         Json?
+
+  feedback  CoachFeedback[]
+  createdAt DateTime        @default(now())
+
+  @@index([userId, startedAt])
+}
+
+model CoachFeedback {
+  id         String         @id @default(cuid())
+  activityId String
+  activity   ActivityRecord @relation(fields: [activityId], references: [id])
+
+  coachId String
+  coach   User   @relation(fields: [coachId], references: [id])
+
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([coachId, createdAt])
+}
+
+model Post {
+  id       String @id @default(cuid())
+  classId  String
+  class    Class  @relation(fields: [classId], references: [id])
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  content   String
+  createdAt DateTime @default(now())
+
+  comments Comment[]
+}
+
+model Comment {
+  id       String @id @default(cuid())
+  postId   String
+  post     Post   @relation(fields: [postId], references: [id])
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model MediaAsset {
+  id         String  @id @default(cuid())
+  classId    String
+  eventId    String?
+  uploaderId String
+
+  type            MediaType // PHOTO/VIDEO
+  url             String
+  thumbnailUrl    String?
+  createdAt       DateTime       @default(now())
+  TrainingEvent   TrainingEvent? @relation(fields: [trainingEventId], references: [id])
+  trainingEventId String?
+
+  @@index([classId, createdAt])
+  @@index([eventId])
+}
+
+/// 결제/구독 
+model Plan {
+  id       String    @id @default(cuid())
+  scope    PlanScope // CLASS_SUBSCRIPTION | COACH_GRADE
+  classId  String?
+  name     String
+  price    Int
+  currency String    @default("KRW")
+}
+
+model Subscription {
+  id        String             @id @default(cuid())
+  userId    String
+  classId   String?
+  planId    String
+  status    SubscriptionStatus @default(ACTIVE)
+  startedAt DateTime           @default(now())
+  endsAt    DateTime?
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  userId            String
+  planId            String
+  subscriptionId    String?
+  status            PaymentStatus
+  amount            Int
+  provider          String?
+  providerPaymentId String?
+  createdAt         DateTime      @default(now())
+}
+
+/// 전역 권한(코치그레이드 등) 
+model Entitlement {
+  id       String          @id @default(cuid())
+  userId   String
+  type     EntitlementType // COACH_GRADE
+  startsAt DateTime        @default(now())
+  endsAt   DateTime?
+}
+
+enum GlobalRole {
+  USER
+  ADMIN
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  NAVER
+  KAKAO
+}
+
+enum ClassMode {
+  ADVANCED
   HYBRID
   ONLINE_ONLY
 }
 
-enum MemberRole {
-  OWNER_COACH
-  STAFF_PACER
-  STAFF_PHOTO
+enum ClassRole {
+  HEAD_COACH
+  COACH
   RUNNER
+  STAFF
 }
 
-enum SessionType {
-  OFFLINE
+enum StaffRole {
+  PHOTO
+  PACER
+}
+
+enum MemberStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum TrainingKind {
+  OFFLINE_SESSION
   ONLINE_TASK
 }
 
-model User {
-  id            String           @id @default(uuid())
-  email         String           @unique
-  name          String
-  role          UserRole         @default(USER)
-  isCoach       Boolean          @default(false)
-  memberships   ClassMember[]
-  records       ActivityRecord[]
-  subscriptions Subscription[]
-  deletedAt     DateTime?
-  createdAt     DateTime         @default(now())
+enum TrainingType {
+  RUN_INTERVAL
+  RUN_JOG
+  RUN_LSD
+  RUN_FARTLEK
+  RUN_TT
+  RUN_TRAIL
+  STRENGTH
+  WALK
+  REST
+  MASSAGE
 }
 
-model Subscription {
-  id        String   @id @default(uuid())
-  userId    String
-  planName  String
-  startDate DateTime
-  endDate   DateTime
-  isActive  Boolean  @default(true)
-  user      User     @relation(fields: [userId], references: [id])
+enum AttendanceStatus {
+  GOING
+  MAYBE
+  NOT_GOING
 }
 
-model Class {
-  id          String        @id @default(uuid())
-  title       String
-  type        ClassType
-  description String?
-  members     ClassMember[]
-  curriculums Curriculum[]
-  feeds       Feed[]
-  isActive    Boolean       @default(true)
-  createdAt   DateTime      @default(now())
+enum ProgressStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  DONE
+  VERIFIED
 }
 
-model ClassMember {
-  id       String     @id @default(uuid())
-  userId   String
-  classId  String
-  role     MemberRole @default(RUNNER)
-  level    String?
-  status   String     @default("ACTIVE")
-  joinedAt DateTime   @default(now())
-  user     User       @relation(fields: [userId], references: [id])
-  class    Class      @relation(fields: [classId], references: [id])
-
-  @@unique([userId, classId])
+enum ActivityProvider {
+  AMAZIFIT
+  GARMIN
+  APPLE
+  SAMSUNG
+  MANUAL
 }
 
-model Curriculum {
-  id         String    @id @default(uuid())
-  classId    String
-  weekNumber Int
-  startDate  DateTime?
-  sessions   Session[]
-  class      Class     @relation(fields: [classId], references: [id])
+enum MediaType {
+  PHOTO
+  VIDEO
 }
 
-model Session {
-  id             String           @id @default(uuid())
-  curriculumId   String
-  dayOfWeek      Int
-  type           SessionType
-  title          String
-  description    String
-  location       String?
-  meetTime       DateTime?
-  targetDistance Float?
-  targetDuration Int?
-  records        ActivityRecord[]
-  curriculum     Curriculum       @relation(fields: [curriculumId], references: [id])
+enum PlanScope {
+  CLASS_SUBSCRIPTION
+  COACH_GRADE
 }
 
-model ActivityRecord {
-  id            String   @id @default(uuid())
-  userId        String
-  sessionId     String?
-  distance      Float
-  duration      Int
-  avgPace       Int
-  mediaUrls     String[]
-  comment       String?
-  coachFeedback String?
-  isVerified    Boolean  @default(false)
-  user          User     @relation(fields: [userId], references: [id])
-  session       Session? @relation(fields: [sessionId], references: [id])
-  createdAt     DateTime @default(now())
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELED
+  REFUNDED
 }
 
-model Feed {
-  id        String   @id @default(uuid())
-  classId   String
-  authorId  String
-  content   String
-  imageUrls String[]
-  createdAt DateTime @default(now())
-  class     Class    @relation(fields: [classId], references: [id])
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum EntitlementType {
+  COACH_GRADE
 }
