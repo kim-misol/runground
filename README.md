@@ -30,3 +30,6 @@ npx expo start -c --tunnel
 모바일 앱(apps/mobile)이 shared-types 패키지를 가져다 쓸 수 있도록 의존성 추가
 
 `pnpm add @runground/shared-types --filter mobile`
+
+### 테스트 실행 
+`pnpm --filter api test:e2e`
