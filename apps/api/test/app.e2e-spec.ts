@@ -26,13 +26,6 @@ describe('AppController (e2e)', () => {
   });
 
   describe('클래스 목록 조회 API', () => {
-    it('/ (GET)', () => {
-      return request(app.getHttpServer())
-        .get('/api')
-        .expect(200)
-        .expect({ message: 'ok', data: [] });
-    });
-
     it('/api (GET) - 변경된 새 스키마 구조로 클래스 목록을 반환해야 한다', async () => {
       const response = await request(app.getHttpServer())
         .get('/api')
@@ -55,6 +48,39 @@ describe('AppController (e2e)', () => {
         expect(item).toHaveProperty('mode'); // ADVANCED, HYBRID, ONLINE_ONLY
         expect(item).toHaveProperty('isActive');
       }
+    });
+  });
+
+  describe('회원가입 API (/api/auth/signup)', () => {
+    // 테스트용 임시 이메일 (실행할 때마다 충돌 방지를 위해 타임스탬프 활용)
+    const testEmail = `runner_${Date.now()}@runground.com`;
+    const signupDto = {
+      email: testEmail,
+      password: 'password123!',
+      name: '테스트러너',
+    };
+
+    it('POST /api/auth/signup - 이메일과 비밀번호로 가입할 수 있어야 한다', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/api/auth/signup')
+        .send(signupDto)
+        .expect(201); // 1. HTTP 상태 코드는 201(Created)이어야 함
+
+      // 2. 응답 데이터 검증
+      expect(response.body).toHaveProperty('id');
+      expect(response.body.email).toBe(signupDto.email);
+      expect(response.body.globalRole).toBe('USER'); // 기본 권한은 USER
+      
+      // 3. 보안: 응답에 비밀번호 해시값이 포함되면 안 됨!
+      expect(response.body).not.toHaveProperty('passwordHash');
+    });
+
+    it('POST /api/auth/signup - 중복된 이메일로 가입하면 409 에러를 반환해야 한다', async () => {
+      // 위에서 이미 가입한 이메일로 다시 요청
+      await request(app.getHttpServer())
+        .post('/api/auth/signup')
+        .send(signupDto)
+        .expect(409); // Conflict (중복)
     });
   });
 });
