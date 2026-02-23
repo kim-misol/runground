@@ -6,8 +6,16 @@ import { AppModule } from './../src/app.module';
 
 import request = require('supertest');
 
-describe('AppController (e2e)', () => {
+describe('Class, Auth & User Module (e2e)', () => {
   let app: INestApplication<App>;
+
+  // 테스트용 임시 이메일 (실행할 때마다 충돌 방지를 위해 타임스탬프 활용)
+  const testEmail = `runner_${Date.now()}@runground.com`;
+  const signupDto = {
+    email: testEmail,
+    password: 'password123!',
+    name: '테스트러너',
+  };
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -52,14 +60,6 @@ describe('AppController (e2e)', () => {
   });
 
   describe('회원가입 API (/api/auth/signup)', () => {
-    // 테스트용 임시 이메일 (실행할 때마다 충돌 방지를 위해 타임스탬프 활용)
-    const testEmail = `runner_${Date.now()}@runground.com`;
-    const signupDto = {
-      email: testEmail,
-      password: 'password123!',
-      name: '테스트러너',
-    };
-
     it('POST /api/auth/signup - 이메일과 비밀번호로 가입할 수 있어야 한다', async () => {
       const response = await request(app.getHttpServer())
         .post('/api/auth/signup')
@@ -81,6 +81,43 @@ describe('AppController (e2e)', () => {
         .post('/api/auth/signup')
         .send(signupDto)
         .expect(409); // Conflict (중복)
+    });
+  });
+
+  describe('로그인 API (/api/auth/login)', () => {
+    // 주의: 테스트 실행 시 위에서 가입한 testEmail과 비밀번호를 그대로 사용합니다.
+    
+    it('POST /api/auth/login - 올바른 정보로 로그인하면 accessToken을 발급해야 한다', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({
+          email: testEmail,
+          password: 'password123!',
+        })
+        .expect(200); // 로그인은 200 OK 응답을 기대함
+
+      // 응답 데이터에 accessToken이 들어있어야 함
+      expect(response.body).toHaveProperty('accessToken');
+    });
+
+    it('POST /api/auth/login - 틀린 비밀번호를 입력하면 401(Unauthorized) 에러가 나야 한다', async () => {
+      await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({
+          email: testEmail,
+          password: 'wrongpassword!', // 일부러 틀린 비밀번호
+        })
+        .expect(401);
+    });
+
+    it('POST /api/auth/login - 가입되지 않은 이메일이면 401(Unauthorized) 에러가 나야 한다', async () => {
+      await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({
+          email: 'notfound@runground.com',
+          password: 'password123!',
+        })
+        .expect(401);
     });
   });
 });
