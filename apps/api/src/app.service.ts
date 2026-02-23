@@ -11,9 +11,9 @@ export class AppService {
   //   // 새 스키마에 맞게 'class' 목록을 조회합니다.
   //   return prisma.class.findMany({
   //     orderBy: { createdAt: 'desc' }, // 최신순 정렬
-  //     include: {
-  //       createdBy: true, // 클래스를 생성한 코치 정보 포함
-  //     },
+  //     // include: {
+  //     //   createdBy: true, // 클래스를 생성한 코치 정보 포함
+  //     // },
   //   });
   // }
   

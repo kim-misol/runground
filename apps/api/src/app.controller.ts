@@ -1,12 +1,20 @@
 import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
+import { prisma } from '@runground/db';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
 
-  @Get()
+  @Get('/health')
   health() {
     return { message: 'ok', data: [] };
+  }
+  
+  @Get()
+  async listClasses() {
+    const data = await prisma.class.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return { message: 'ok', data };
   }
 }

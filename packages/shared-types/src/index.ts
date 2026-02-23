@@ -7,8 +7,9 @@ export interface UserDto {
 export interface ClassItem {
   id: string;
   title: string;
-  type: string;
-  isActive: boolean;
+  mode: 'ADVANCED' | 'HYBRID' | 'ONLINE_ONLY'; // 변경된 Enum 반영
+  intro: string | null; // description 대신 intro 사용
+  createdById: string;
 }
 
 // 나중에 백엔드 API 응답용 타입도 추가 가능
