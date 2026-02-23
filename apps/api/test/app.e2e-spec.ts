@@ -120,4 +120,43 @@ describe('Class, Auth & User Module (e2e)', () => {
         .expect(401);
     });
   });
+
+  describe('내 정보 조회 API (/api/auth/me) - JWT 인증 검사', () => {
+    let accessToken: string;
+
+    // 테스트를 위해 먼저 로그인을 해서 토큰을 발급받아 둡니다.
+    beforeAll(async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({ email: testEmail, password: 'password123!' });
+      
+      accessToken = res.body.accessToken; // 발급받은 토큰 저장
+    });
+
+    it('GET /api/auth/me - 유효한 토큰을 헤더에 담아 보내면 내 정보를 반환해야 한다', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${accessToken}`) // 👈 토큰을 헤더에 세팅!
+        .expect(200);
+
+      // 내 정보가 제대로 오는지 검증
+      expect(response.body).toHaveProperty('id');
+      expect(response.body).toHaveProperty('email', testEmail);
+      expect(response.body).not.toHaveProperty('passwordHash'); // 비밀번호는 절대 오면 안 됨
+    });
+
+    it('GET /api/auth/me - 토큰 없이 요청하면 401(Unauthorized) 에러가 나야 한다', async () => {
+      await request(app.getHttpServer())
+        .get('/api/auth/me')
+        // Authorization 헤더 세팅 안 함!
+        .expect(401);
+    });
+
+    it('GET /api/auth/me - 위조되거나 만료된 토큰을 보내면 401(Unauthorized) 에러가 나야 한다', async () => {
+      await request(app.getHttpServer())
+        .get('/api/auth/me')
+        .set('Authorization', 'Bearer fake_and_invalid_token_123') // 👈 가짜 토큰
+        .expect(401);
+    });
+  });
 });

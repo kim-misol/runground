@@ -63,4 +63,18 @@ export class AuthService {
       }
     };
   }
+
+  async getMe(userId: string) {
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      include: { profile: true }, // 프로필 정보도 함께 가져옵니다
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('유저 정보를 찾을 수 없습니다.');
+    }
+
+    const { passwordHash, ...result } = user; // 비밀번호는 빼고 반환!
+    return result;
+  }
 }
