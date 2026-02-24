@@ -8,7 +8,7 @@ import { Roles } from '../auth/roles.decorator';
 export class ClassController {
   constructor(private readonly classService: ClassService) {}
 
-  // 1. 클래스 생성 (ADMIN 권한 필요)
+  // 클래스 생성 (ADMIN 권한 필요)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   @Post()
@@ -31,7 +31,14 @@ export class ClassController {
     return this.classService.getMyClasses(req.user.sub);
   }
 
-  // 2. 클래스 가입 (로그인한 유저 누구나 가능)
+  // 특정 클래스 상세 조회
+  @UseGuards(JwtAuthGuard)
+  @Get(':id')
+  async getClassDetails(@Param('id') classId: string) {
+    return this.classService.getClassDetails(classId);
+  }
+
+  // 클래스 구독 (로그인한 유저 누구나 가능)
   @UseGuards(JwtAuthGuard)
   @Post(':id/join')
   async joinClass(@Param('id') classId: string, @Request() req: any) {

@@ -142,6 +142,13 @@ export default function DashboardPage() {
                 <p style={{ color: '#666', fontSize: '14px', lineHeight: '1.5' }}>
                   {cls.intro || '소개가 없습니다.'}
                 </p>
+                {/* 상세 페이지 이동 버튼 */}
+                <button 
+                  onClick={() => router.push(`/dashboard/classes/${cls.id}`)}
+                  style={{ width: '100%', padding: '10px', backgroundColor: '#f5f5f5', color: '#333', border: '1px solid #ddd', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', transition: 'background-color 0.2s' }}
+                >
+                  👥 멤버 및 상세 보기
+                </button>
               </div>
             ))}
           </div>

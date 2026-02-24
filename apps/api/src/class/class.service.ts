@@ -1,5 +1,5 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
-import { prisma as db } from '@runground/db'; // 👈 프리즈마 클라이언트 모듈 에러를 피하기 위해 @prisma/client 임포트 삭제!
+import { prisma as db } from '@runground/db';
 
 @Injectable()
 export class ClassService {
@@ -16,7 +16,7 @@ export class ClassService {
         memberships: {
           create: {
             userId: userId,
-            role: 'HEAD_COACH', // 👈 Enum 대신 프리즈마가 알아듣는 안전한 문자열 사용
+            role: 'HEAD_COACH', // Enum 대신 프리즈마가 알아듣는 안전한 문자열 사용
             memberStatus: 'ACTIVE',
           },
         },
@@ -35,7 +35,7 @@ export class ClassService {
     }
 
     // 2) 이미 가입된 멤버인지 확인
-    // 💡 해결의 핵심: 복합 키 이름 에러를 피하기 위해 findUnique 대신 findFirst를 사용합니다!
+    // 복합 키 이름 에러를 피하기 위해 findUnique 대신 findFirst를 사용
     const existingMember = await db.classMembership.findFirst({
       where: {
         userId: userId,
@@ -52,7 +52,7 @@ export class ClassService {
       data: {
         classId,
         userId,
-        role: 'RUNNER', // 👈 Enum 대신 문자열 사용
+        role: 'RUNNER', // Enum 대신 문자열 사용
         memberStatus: 'ACTIVE',
       },
     });
@@ -82,5 +82,33 @@ export class ClassService {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  // 5. 특정 클래스 상세 조회 (가입한 멤버 정보 포함)
+  async getClassDetails(classId: string) {
+    const classDetails = await db.class.findUnique({
+      where: { id: classId },
+      include: {
+        memberships: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                globalRole: true,
+                // UserProfile 테이블 조인
+                profile: {
+                  select: { name: true }
+                }
+              }
+            },
+          },
+          orderBy: { joinedAt: 'asc' }, // 먼저 가입한 순서대로 정렬
+        },
+      },
+    });
+
+    if (!classDetails) throw new NotFoundException('클래스를 찾을 수 없습니다.');
+    return classDetails;
   }
 }
