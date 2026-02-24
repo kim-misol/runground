@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Body, Param, UseGuards, Request, Get } from '@nestjs/common';
 import { ClassService } from './class.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -15,6 +15,20 @@ export class ClassController {
   async createClass(@Body() body: any, @Request() req: any) {
     // req.user.sub 에는 토큰에서 해독한 userId가 들어있습니다.
     return this.classService.createClass(body, req.user.sub);
+  }
+
+  // 전체 클래스 조회
+  @UseGuards(JwtAuthGuard)
+  @Get()
+  async getAllClasses() {
+    return this.classService.getAllClasses();
+  }
+
+  // 내 클래스 목록 조회
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  async getMyClasses(@Request() req: any) {
+    return this.classService.getMyClasses(req.user.sub);
   }
 
   // 2. 클래스 가입 (로그인한 유저 누구나 가능)

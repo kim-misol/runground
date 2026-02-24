@@ -43,7 +43,6 @@ describe('Class Module (e2e)', () => {
     await app.close();
   });
 
-  // ---------------------------------------------------
   describe('클래스 생성 API (/api/classes)', () => {
     const newClassDto = {
       title: '2026 하프마라톤 준비반',
@@ -74,7 +73,6 @@ describe('Class Module (e2e)', () => {
     });
   });
 
-  // ---------------------------------------------------
   describe('클래스 가입 API (/api/classes/:id/join)', () => {
     it('POST /api/classes/:id/join - 러너(USER)는 클래스에 가입할 수 있어야 한다', async () => {
       const response = await request(app.getHttpServer())
@@ -85,6 +83,34 @@ describe('Class Module (e2e)', () => {
       expect(response.body).toHaveProperty('id');
       expect(response.body.classId).toBe(createdClassId);
       expect(response.body.role).toBe('RUNNER'); // 가입 시 기본 역할은 RUNNER
+    });
+  });
+
+  describe('클래스 목록 조회 API', () => {
+    it('GET /api/classes - 토큰이 있는 유저는 전체 클래스 목록을 조회할 수 있어야 한다', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/classes')
+        .set('Authorization', `Bearer ${runnerToken}`) // 러너 토큰 사용
+        .expect(200);
+
+      expect(Array.isArray(response.body)).toBeTruthy();
+      // 방금 위 테스트에서 생성한 클래스가 배열 안에 있어야 함
+      const foundClass = response.body.find((c: any) => c.id === createdClassId);
+      expect(foundClass).toBeDefined();
+      expect(foundClass.title).toBe('2026 하프마라톤 준비반');
+    });
+
+    it('GET /api/classes/me - 로그인한 유저(러너)가 속한 클래스 목록만 조회할 수 있어야 한다', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/classes/me')
+        .set('Authorization', `Bearer ${runnerToken}`) // 러너 토큰 사용
+        .expect(200);
+
+      expect(Array.isArray(response.body)).toBeTruthy();
+      // 러너가 방금 가입한 클래스가 목록에 있어야 함
+      const myClass = response.body.find((c: any) => c.id === createdClassId);
+      expect(myClass).toBeDefined();
+      expect(myClass.memberships).toBeDefined(); // 내가 가입한 정보(역할 등)도 함께 와야 함
     });
   });
 });

@@ -59,4 +59,28 @@ export class ClassService {
 
     return membership;
   }
+
+  // 3. 전체 클래스 목록 조회
+  async getAllClasses() {
+    return db.class.findMany({
+      orderBy: { createdAt: 'desc' }, // 최신순 정렬
+    });
+  }
+
+  // 4. 내 클래스 목록 조회 (내가 가입하거나 만든 클래스)
+  async getMyClasses(userId: string) {
+    return db.class.findMany({
+      where: {
+        memberships: {
+          some: { userId: userId }, // 내 userId가 멤버십에 포함된 클래스만 검색
+        },
+      },
+      include: {
+        memberships: {
+          where: { userId: userId }, // 반환할 때 내 멤버십 정보도 포함
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }
