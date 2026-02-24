@@ -159,4 +159,52 @@ describe('Class, Auth & User Module (e2e)', () => {
         .expect(401);
     });
   });
+
+  describe('권한(Role) 검증 API (/api/auth/admin-only)', () => {
+    let userToken: string;
+    let adminToken: string;
+
+    beforeAll(async () => {
+      // 1. 일반 유저(USER) 토큰 (위에서 가입한 testEmail 재사용)
+      const userRes = await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({ email: testEmail, password: 'password123!' });
+      userToken = userRes.body.accessToken;
+
+      // 2. 관리자(ADMIN) 전용 계정 가입
+      const adminEmail = `admin_${Date.now()}@runground.com`;
+      await request(app.getHttpServer())
+        .post('/api/auth/signup')
+        .send({ email: adminEmail, password: 'adminpass!', name: '관리자님' });
+      
+      // 🚨 테스트를 위해 Prisma로 DB에 직접 접근해서 권한을 ADMIN으로 조작합니다 (백도어)
+      const { PrismaClient } = require('@prisma/client');
+      const prisma = new PrismaClient();
+      await prisma.user.update({
+        where: { email: adminEmail },
+        data: { globalRole: 'ADMIN' },
+      });
+      await prisma.$disconnect();
+
+      // 3. 관리자 계정 로그인 및 토큰 발급
+      const adminRes = await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({ email: adminEmail, password: 'adminpass!' });
+      adminToken = adminRes.body.accessToken;
+    });
+
+    it('GET /api/auth/admin-only - 일반 유저(USER)가 접근하면 403(Forbidden) 에러가 나야 한다', async () => {
+      await request(app.getHttpServer())
+        .get('/api/auth/admin-only')
+        .set('Authorization', `Bearer ${userToken}`)
+        .expect(403); // 권한 없음!
+    });
+
+    it('GET /api/auth/admin-only - 관리자(ADMIN)가 접근하면 200 OK를 반환해야 한다', async () => {
+      await request(app.getHttpServer())
+        .get('/api/auth/admin-only')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200); // 통과!
+    });
+  });
 });
