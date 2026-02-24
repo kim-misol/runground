@@ -122,6 +122,7 @@ pnpm add @runground/shared-types --filter mobile
 
 # 테스트 실행 
 pnpm --filter api test:e2e
+pnpm --filter api test:e2e class.e2e-spec.ts
 
 # DB seeding
 git push --set-upstream origin tdd
