@@ -126,4 +126,7 @@ pnpm --filter api test:e2e class.e2e-spec.ts
 
 # DB seeding
 git push --set-upstream origin tdd
+
+# Prisma Studio 열기
+pnpm --filter db exec prisma studio
 ```
