@@ -44,4 +44,20 @@ export class ClassController {
   async joinClass(@Param('id') classId: string, @Request() req: any) {
     return this.classService.joinClass(classId, req.user.sub);
   }
+
+  // 코치(ADMIN)만 훈련 일정을 만들 수 있음
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Post(':id/events')
+  async createEvent(@Param('id') classId: string, @Body() body: any, @Request() req: any) {
+    // req.user.sub(코치 ID)를 반드시 넘겨주어야 합니다.
+    return this.classService.createEvent(classId, req.user.sub, body);
+  }
+
+  // 클래스 멤버라면 누구나 훈련 일정을 조회할 수 있음
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/events')
+  async getClassEvents(@Param('id') classId: string) {
+    return this.classService.getClassEvents(classId);
+  }
 }

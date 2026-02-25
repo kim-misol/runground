@@ -113,4 +113,51 @@ describe('Class Module (e2e)', () => {
       expect(myClass.memberships).toBeDefined(); // 내가 가입한 정보(역할 등)도 함께 와야 함
     });
   });
+
+  describe('훈련 일정(TrainingEvent) API', () => {
+    let createdEventId: string;
+
+    it('POST /api/classes/:id/events - 코치(ADMIN)는 클래스에 오프라인 훈련을 생성할 수 있다', async () => {
+      const response = await request(app.getHttpServer())
+        .post(`/api/classes/${createdClassId}/events`)
+        .set('Authorization', `Bearer ${coachToken}`)
+        .send({
+          kind: 'OFFLINE_SESSION', // 스키마의 TrainingKind Enum
+          title: '3월 1일 - 5km 페이스주',
+          location: '잠실 보조경기장',
+          startsAt: '2026-03-01T09:00:00Z', // date 대신 startsAt 사용
+        })
+        .expect(201);
+
+      expect(response.body.id).toBeDefined();
+      expect(response.body.title).toBe('3월 1일 - 5km 페이스주');
+      
+      createdEventId = response.body.id; 
+    });
+
+    it('POST /api/classes/:id/events - 일반 러너(USER)가 일정을 생성하려고 하면 403 에러가 발생한다', async () => {
+      await request(app.getHttpServer())
+        .post(`/api/classes/${createdClassId}/events`)
+        .set('Authorization', `Bearer ${runnerToken}`)
+        .send({
+          kind: 'OFFLINE_SESSION',
+          title: '러너가 몰래 만드는 일정',
+          startsAt: '2026-03-02T09:00:00Z',
+        })
+        .expect(403);
+    });
+
+    it('GET /api/classes/:id/events - 가입한 멤버는 클래스의 훈련 일정 목록을 조회할 수 있다', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/api/classes/${createdClassId}/events`)
+        .set('Authorization', `Bearer ${runnerToken}`)
+        .expect(200);
+
+      expect(Array.isArray(response.body)).toBeTruthy();
+      
+      const foundEvent = response.body.find((e: any) => e.id === createdEventId);
+      expect(foundEvent).toBeDefined();
+      expect(foundEvent.title).toBe('3월 1일 - 5km 페이스주');
+    });
+  });
 });

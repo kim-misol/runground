@@ -111,4 +111,29 @@ export class ClassService {
     if (!classDetails) throw new NotFoundException('클래스를 찾을 수 없습니다.');
     return classDetails;
   }
+
+  // 6. 훈련 일정(이벤트) 생성
+  async createEvent(classId: string, userId: string, data: { kind: any; title: string; location?: string; startsAt: string }) {
+    return db.trainingEvent.create({
+      data: {
+        kind: data.kind || 'OFFLINE_SESSION',
+        title: data.title,
+        location: data.location,
+        startsAt: new Date(data.startsAt),
+        classId: classId,
+        createdById: userId, // 👈 스키마에 정의된 필수 관계 연결
+      },
+    });
+  }
+
+  // 7. 특정 클래스의 훈련 일정 목록 조회
+  async getClassEvents(classId: string) {
+    return db.trainingEvent.findMany({
+      where: { classId: classId },
+      orderBy: { startsAt: 'asc' }, // 시작 시간 순 정렬
+      include: { 
+        createdBy: { select: { id: true, email: true } } // 코치 정보도 살짝 포함
+      }
+    });
+  }
 }
