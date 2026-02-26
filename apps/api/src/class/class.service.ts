@@ -112,27 +112,43 @@ export class ClassService {
     return classDetails;
   }
 
-  // 6. 훈련 일정(이벤트) 생성
-  async createEvent(classId: string, userId: string, data: { kind: any; title: string; location?: string; startsAt: string }) {
+  // 6. 훈련 일정(이벤트) 및 세부 훈련(Detail) 동시 생성
+  async createEvent(classId: string, userId: string, data: any) {
     return db.trainingEvent.create({
       data: {
         kind: data.kind || 'OFFLINE_SESSION',
         title: data.title,
         location: data.location,
         startsAt: new Date(data.startsAt),
+        endsAt: data.endsAt ? new Date(data.endsAt) : null,
         classId: classId,
-        createdById: userId, // 👈 스키마에 정의된 필수 관계 연결
+        createdById: userId,
+        // 전달받은 세부 훈련 배열을 TrainingDetail 테이블에 동시 생성
+        details: {
+          create: data.details?.map((detail: any, index: number) => ({
+            section: detail.section || 'MAIN',
+            order: index + 1, // 배열 순서대로 order 지정
+            type: detail.type || 'RUN_JOG',
+            note: detail.note,
+            distanceKm: detail.distanceKm ? parseFloat(detail.distanceKm) : null,
+            durationMin: detail.durationMin ? parseInt(detail.durationMin, 10) : null,
+            reps: detail.reps ? parseInt(detail.reps, 10) : null,
+            sets: detail.sets ? parseInt(detail.sets, 10) : null,
+          })) || []
+        }
       },
     });
   }
 
-  // 7. 특정 클래스의 훈련 일정 목록 조회
+  // 7. 특정 클래스의 훈련 일정 목록 조회 (세부 내용 포함)
   async getClassEvents(classId: string) {
     return db.trainingEvent.findMany({
       where: { classId: classId },
-      orderBy: { startsAt: 'asc' }, // 시작 시간 순 정렬
+      orderBy: { startsAt: 'asc' },
       include: { 
-        createdBy: { select: { id: true, email: true } } // 코치 정보도 살짝 포함
+        createdBy: { select: { id: true, email: true } },
+        // 조회할 때 TrainingDetail 데이터도 order 순서대로 가져옵니다.
+        details: { orderBy: { order: 'asc' } }
       }
     });
   }
