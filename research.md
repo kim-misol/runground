@@ -266,16 +266,12 @@ AppModule
 ### 5.5 ClassService 주요 로직
 
 - **createClass**: 클래스 생성 + 생성자를 HEAD_COACH로 자동 멤버십 등록
-- **joinClass**: 중복 참가 방지 (ConflictException), RUNNER 역할로 멤버십 생성
+- **requestJoin** _(미구현)_: RUNNER가 탐색 앱에서 클래스 구독 신청 (PENDING 상태)
+- **approveJoin** _(미구현)_: HEAD_COACH가 신청 목록을 보고 수락 → 멤버십 ACTIVE로 전환
 - **createEvent**: TrainingEvent + 중첩 TrainingDetail 배열을 한 번에 생성
 - **getClassEvents**: `startsAt` 오름차순, 각 이벤트 내 details는 `order` 오름차순
-<!-- 
-TODO: ClassService 주요 로직 수정
-1. 클래스 생성 + 생성자를 HEAD_COACH 로 자동 멤버십 등록
-2. RUNNER 가 클래스 탐색 앱에서 클래스 구독 신청
-3. HEAD_COACH 가 구독 신청한 RUNNER 리스트를 보고 구독 수락
-4. HEAD_COACH 가 구독 수락해준 RUNNER 는 클래스 JOIN
- -->
+
+> 현재 `joinClass`는 신청 즉시 RUNNER로 가입되는 구조. HEAD_COACH 수락 단계가 추가되어야 한다.
 
 ---
 
@@ -286,18 +282,11 @@ TODO: ClassService 주요 로직 수정
 ### 6.1 페이지 구조
 
 ```
-/                   → 로그인 페이지
-/dashboard          → 코치 대시보드 (내 클래스 목록 + 클래스 생성)
+/                       → 코치 대시보드 (내 클래스 목록 + 클래스 생성)
+                          token 없으면 /login 으로 자동 리다이렉트
+/login                  → 로그인 페이지
 /dashboard/classes/[id] → 클래스 상세 (훈련 이벤트 생성/조회, 멤버 목록)
 ```
-<!-- 
-TODO: 페이지 구조 변경
-/                   → 코치 대시보드 (내 클래스 목록 + 클래스 생성)
-/login              → 로그인 페이지
-/dashboard/classes/[id] → 클래스 상세 (훈련 이벤트 생성/조회, 멤버 목록)
-
-* `/` 로 라우팅 했는데 token 이 없으면 `/login` 으로 자동 라우팅
- -->
 
 ### 6.2 주요 동작
 
@@ -401,23 +390,53 @@ export interface ApiResponse<T> {
 
 ## 9. 데이터 흐름 예시
 
-### 훈련 이벤트 생성 → 모바일 조회
+
+### 클래스 구독 신청 → HEAD_COACH 수락 → 훈련 일정 조회 (목표 흐름)
 
 ```
 [웹] 코치가 폼 작성
   → POST /api/classes/:id/events
-  → JwtAuthGuard (토큰 검증)
-  → RolesGuard (ADMIN 확인)
-  → ClassService.createEvent()
-  → Prisma: TrainingEvent + TrainingDetail[] 생성
-  → 201 응답
+  - JwtAuthGuard (토큰 검증)
+  • RolesGuard (ADMIN 확인)
+  → ClassService. createEvent()
+  → Prisma: TrainingEvent + TrainingDetaill[]
+  • 201 응답
 
-[모바일] 러너가 ClassDetailScreen 진입
+[모바일] 러너가 ExploreScreen에서 "구독하기" 탭
+  → POST /api/classes/:id/join          ← 현재: 즉시 RUNNER로 가입 (임시)
+  → (목표) ClassService.requestJoin()
+  → Prisma: ClassMembership { memberStatus: PENDING } 생성
+
+[웹] HEAD_COACH가 /dashboard/classes/:id 접속
+  → GET /api/classes/:id (멤버 목록 조회)
+  → 신청 목록(PENDING) 확인
+  → (목표) POST /api/classes/:id/members/:userId/approve
+  → ClassService.approveJoin()
+  → Prisma: ClassMembership.memberStatus → ACTIVE
+
+[모바일] 러너가 MyClassesScreen 진입
+  → GET /api/classes/me
+  → 가입 승인된 클래스 목록 표시
+  → 클래스 카드 탭 → ClassDetailScreen
+
+[모바일] ClassDetailScreen 마운트
   → GET /api/classes/:id/events
   → JwtAuthGuard
   → ClassService.getClassEvents()
   → Prisma: events + details (order ASC) 조회
   → FlatList 렌더링
+```
+
+### 훈련 이벤트 생성 흐름 (현재)
+
+```
+[웹] 코치가 /dashboard/classes/:id 에서 폼 작성
+  → POST /api/classes/:id/events
+  → JwtAuthGuard (토큰 검증)
+  → ClassCoachGuard (클래스 내 COACH 이상 역할 확인) ← 목표; 현재는 ADMIN Guard
+  → ClassService.createEvent()
+  → Prisma: TrainingEvent + TrainingDetail[] 생성
+  → 201 응답
 ```
 
 ---
@@ -429,18 +448,26 @@ export interface ApiResponse<T> {
 - [x] 이메일/비밀번호 회원가입 및 로그인
 - [x] JWT 기반 인증 + 역할(ADMIN/USER) 기반 접근 제어
 - [x] 클래스 생성, 목록 조회, 상세 조회
-- [x] 클래스 참가 (RUNNER 멤버십)
+- [x] 클래스 즉시 참가 (RUNNER 멤버십 — 승인 없이 바로 ACTIVE)
 - [x] 훈련 이벤트 생성 (WARMUP/MAIN/COOLDOWN 세부 항목 포함)
 - [x] 훈련 이벤트 조회 (웹/모바일)
 - [x] 모바일 클래스 탐색 및 구독
 - [x] 모바일 클래스 상세 + 훈련 일정 조회
+- [x] 모바일 토큰 헬퍼 유틸 (`src/utils/auth.ts`) — Platform 분기 캡슐화
+- [x] 웹 로그인 페이지 `/login` 분리, `/` → 대시보드 (토큰 없으면 자동 리다이렉트)
+
+### 로직 변경 필요 (설계 대비 미구현)
+
+- [ ] 클래스 구독 신청 → HEAD_COACH 수락 흐름 (`requestJoin` / `approveJoin`)
+  - 현재: `joinClass` 호출 시 즉시 ACTIVE. `MemberStatus.PENDING` 상태 미활용
+  - 목표: 신청 → 코치 웹 대시보드에서 목록 확인 → 수락/거절
 
 ### 스키마는 있으나 API/UI 미구현
 
 - [ ] 소셜 로그인 (Google / Naver / Kakao)
 - [ ] ClassInvitation (운영진 이메일 초대)
 - [ ] AttendanceVote (세션 참석 투표)
-- [ ] ActivityRecord (웨어러블 기록 연동)
+- [ ] ActivityRecord (웨어러블/수동 기록 업로드)
 - [ ] CoachFeedback (코치 피드백 작성)
 - [ ] TrainingProgress (수행 여부 추적)
 - [ ] Post / Comment (클래스 게시판)
@@ -458,7 +485,8 @@ export interface ApiResponse<T> {
 | CORS 전체 허용 | 프로덕션에서 특정 origin으로 제한 필요 | 🟡 중요 |
 | 역할 체계 불일치 | DB는 HEAD_COACH/COACH/RUNNER/STAFF, JWT payload는 globalRole(USER/ADMIN)만 사용 | 🟡 중요 |
 | 클래스 생성 권한 | 현재 ADMIN만 가능, 요구사항은 코치(COACH_GRADE 구독자)도 가능해야 함 | 🟡 중요 |
-| 플랫폼 분기 코드 중복 | `Platform.OS === 'web'` 분기가 모든 화면에 반복됨, 유틸 함수로 추출 필요 | 🟢 개선 |
+| joinClass 즉시 가입 | 승인 없이 바로 ACTIVE — PENDING → 코치 수락 흐름으로 전환 필요 | 🟡 중요 |
+| 플랫폼 분기 코드 중복 | ~~`Platform.OS === 'web'` 분기 반복~~ → `src/utils/auth.ts`로 해결 완료 | ✅ 완료 |
 | shared-types 미활용 | 웹/모바일에서 `any` 타입 다수 사용, 공유 타입 적용 필요 | 🟢 개선 |
 | 멤버 목록 미완성 | 웹 클래스 상세 페이지 멤버 섹션이 미구현 | 🟢 개선 |
 

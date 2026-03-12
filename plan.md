@@ -246,7 +246,63 @@ acceptInvitation(@Param('token') token: string, @Request() req: any) {
 }
 ```
 
-### 1-2. 러너 활성/비활성 토글
+### 1-2. 구독 신청 / 수락 흐름 (requestJoin → approveJoin)
+
+**문제:** 현재 `joinClass`는 즉시 ACTIVE. `MemberStatus.PENDING` → 코치 수락 → ACTIVE 흐름으로 전환 필요.
+
+**`apps/api/src/class/class.service.ts`에 추가**
+```typescript
+async requestJoin(classId: string, userId: string) {
+  const existing = await db.classMembership.findFirst({
+    where: { classId, userId },
+  });
+  if (existing) throw new ConflictException('이미 신청하거나 가입된 클래스입니다.');
+
+  return db.classMembership.create({
+    data: { classId, userId, role: 'RUNNER', memberStatus: 'INACTIVE' },
+  });
+}
+
+async approveJoin(classId: string, targetUserId: string) {
+  return db.classMembership.update({
+    where: { classId_userId: { classId, userId: targetUserId } },
+    data: { memberStatus: 'ACTIVE' },
+  });
+}
+```
+
+**`apps/api/src/class/class.controller.ts`에 엔드포인트 추가**
+```typescript
+// 기존 POST :id/join → requestJoin으로 변경
+@UseGuards(JwtAuthGuard)
+@Post(':id/join')
+requestJoin(@Param('id') classId: string, @Request() req: any) {
+  return this.classService.requestJoin(classId, req.user.sub);
+}
+
+// 코치가 신청 수락
+@UseGuards(JwtAuthGuard, ClassCoachGuard)
+@Post(':id/members/:userId/approve')
+approveJoin(
+  @Param('id') classId: string,
+  @Param('userId') targetUserId: string,
+) {
+  return this.classService.approveJoin(classId, targetUserId);
+}
+
+// 코치가 PENDING 목록 조회
+@UseGuards(JwtAuthGuard, ClassCoachGuard)
+@Get(':id/members/pending')
+getPendingMembers(@Param('id') classId: string) {
+  return this.classService.getMembersByStatus(classId, 'INACTIVE');
+}
+```
+
+> `getMembersByStatus`는 `findMany({ where: { classId, memberStatus: status } })`로 구현.
+
+---
+
+### 1-3. 러너 활성/비활성 토글
 
 ```typescript
 // class.service.ts
@@ -338,9 +394,9 @@ getMyEvents(@Param('id') classId: string, @Request() req: any) {
 
 ```typescript
 // ClassDetailScreen.tsx: /events → /my-events
-const response = await fetch(`${API_URL}/classes/${classId}/my-events`, {
-  headers: { Authorization: `Bearer ${token}` },
-});
+import { apiFetch } from '../utils/auth';
+
+const response = await apiFetch(`/classes/${classId}/my-events`);
 ```
 
 ---
@@ -412,6 +468,8 @@ export class ActivityController {
 
 ```tsx
 // src/screens/RecordUploadScreen.tsx
+import { apiFetch } from '../utils/auth';
+
 const PROVIDERS = ['MANUAL', 'GARMIN', 'APPLE', 'SAMSUNG', 'AMAZIFIT'];
 
 export default function RecordUploadScreen({ route, navigation }: any) {
@@ -427,13 +485,8 @@ export default function RecordUploadScreen({ route, navigation }: any) {
   });
 
   const submit = async () => {
-    const token = Platform.OS === 'web'
-      ? localStorage.getItem('accessToken')
-      : await SecureStore.getItemAsync('accessToken');
-
-    const res = await fetch(`${API_URL}/activity`, {
+    const res = await apiFetch('/activity', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         classId,
         provider: form.provider,
@@ -585,10 +638,8 @@ export class EventController {
 ```tsx
 // src/components/AttendanceVoteBar.tsx
 import React, { useState } from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/api';
+import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { apiFetch } from '../utils/auth';
 
 type Status = 'GOING' | 'MAYBE' | 'NOT_GOING';
 
@@ -605,13 +656,8 @@ export default function AttendanceVoteBar({ eventId, initialStatus }: {
   const [selected, setSelected] = useState<Status | null>(initialStatus ?? null);
 
   const vote = async (status: Status) => {
-    const token = Platform.OS === 'web'
-      ? localStorage.getItem('accessToken')
-      : await SecureStore.getItemAsync('accessToken');
-
-    await fetch(`${API_URL}/events/${eventId}/attendance`, {
+    await apiFetch(`/events/${eventId}/attendance`, {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     });
     setSelected(status);
@@ -678,21 +724,18 @@ updateProfile(@Body() body: any, @Request() req: any) {
 
 ```tsx
 // src/screens/ProfileScreen.tsx
+import { apiFetch } from '../utils/auth';
+
 export default function ProfileScreen({ navigation }: any) {
   const [profile, setProfile] = useState({ name: '', phone: '', instagram: '' });
 
   useEffect(() => {
-    // GET /api/auth/me 호출 후 profile 초기화
+    apiFetch('/auth/me').then(r => r.json()).then(data => setProfile(data.profile ?? {}));
   }, []);
 
   const save = async () => {
-    const token = Platform.OS === 'web'
-      ? localStorage.getItem('accessToken')
-      : await SecureStore.getItemAsync('accessToken');
-
-    await fetch(`${API_URL}/auth/profile`, {
+    await apiFetch('/auth/profile', {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(profile),
     });
     Alert.alert('저장되었습니다.');
@@ -838,11 +881,11 @@ async confirmPayment(paymentId: string, pgToken: string) {
 
 ---
 
-## 공통 유틸: 토큰 헬퍼 (모바일 코드 중복 제거)
+## 공통 유틸: 토큰 헬퍼 (모바일 코드 중복 제거) ✅ 완료
 
-현재 모든 모바일 화면에서 `Platform.OS === 'web'` 분기가 반복됨.
+> `apps/mobile/src/utils/auth.ts` 생성 완료. 모든 화면(LoginScreen, MyClassesScreen, ExploreScreen, ClassDetailScreen)에 적용 완료.
 
-**`apps/mobile/src/utils/auth.ts` 신규 생성**
+**`apps/mobile/src/utils/auth.ts`**
 ```typescript
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
@@ -925,12 +968,17 @@ model TrainingProgress {
 ## 구현 순서 요약 (추천)
 
 ```
-Week 1  Phase 0 (보안 수정) + Phase 6 (프로필)
-Week 2  Phase 1 (권한 체계) + Phase 2 (일정 노출 규칙)
-Week 3  Phase 3 (참석 투표) + Phase 4 (기록 업로드)
-Week 4  Phase 5 (코치 피드백)
-Week 5  Phase 7 (소셜 로그인)
-Week 6+ Phase 8 (결제)
+✅ 완료  공통 유틸 auth.ts + 4개 화면 apiFetch 적용
+Week 1  Phase 0 (보안: JWT 환경변수화 + ConfigModule)
+Week 2  Phase 0-2 (역할 체계: CoachGuard, ClassCoachGuard)
+         Phase 1   (구독 신청/수락 흐름: requestJoin / approveJoin)
+Week 3  Phase 2 (훈련 일정 노출 규칙: getMyEvents)
+         Phase 3 (기록 수동 업로드: ActivityRecord)
+Week 4  Phase 4 (코치 피드백: CoachFeedback)
+         Phase 6 (참석 투표: AttendanceVote)
+Week 5  Phase 7 (프로필 관리: ProfileScreen)
+Week 6  Phase 8 (소셜 로그인: OAuth)
+Week 7+ Phase 9 (결제/구독)
 ```
 
 ---
@@ -944,7 +992,7 @@ Week 6+ Phase 8 (결제)
 - [ ] `apps/api/src/activity/activity.module.ts`
 - [ ] `apps/api/src/activity/activity.service.ts`
 - [ ] `apps/api/src/activity/activity.controller.ts`
-- [ ] `apps/mobile/src/utils/auth.ts`
+- [x] `apps/mobile/src/utils/auth.ts` ✅
 - [ ] `apps/mobile/src/components/AttendanceVoteBar.tsx`
 - [ ] `apps/mobile/src/screens/ProfileScreen.tsx`
 - [ ] `apps/mobile/src/screens/RecordUploadScreen.tsx`
@@ -955,12 +1003,12 @@ Week 6+ Phase 8 (결제)
 - [ ] `apps/api/src/auth/jwt-auth.guard.ts` (환경변수 사용)
 - [ ] `apps/api/src/auth/auth.service.ts` (프로필 수정, 소셜 로그인)
 - [ ] `apps/api/src/auth/auth.controller.ts` (신규 엔드포인트)
-- [ ] `apps/api/src/class/class.service.ts` (초대, 상태 토글, 일정 노출)
-- [ ] `apps/api/src/class/class.controller.ts` (CoachGuard 적용)
+- [ ] `apps/api/src/class/class.service.ts` (requestJoin/approveJoin, 초대, 상태 토글, 일정 노출)
+- [ ] `apps/api/src/class/class.controller.ts` (CoachGuard 적용, 신청/수락 엔드포인트)
 - [ ] `apps/api/src/app.module.ts` (ActivityModule 등록)
 - [ ] `packages/db/prisma/schema.prisma` (TrainingProgress 관계 정리)
-- [ ] `apps/mobile/App.tsx` (ProfileScreen 탭 추가)
+- [ ] `apps/mobile/App.tsx` (ProfileScreen 탭 추가, ClassDetail 스택 등록)
 - [ ] `apps/mobile/src/screens/ClassDetailScreen.tsx` (AttendanceVoteBar, /my-events 사용)
-- [ ] `apps/mobile/src/screens/MyClassesScreen.tsx` (apiFetch 유틸 사용)
-- [ ] `apps/mobile/src/screens/LoginScreen.tsx` (apiFetch 유틸 사용)
-- [ ] `apps/mobile/src/screens/ExploreScreen.tsx` (apiFetch 유틸 사용)
+- [x] `apps/mobile/src/screens/MyClassesScreen.tsx` ✅ (apiFetch 적용 완료)
+- [x] `apps/mobile/src/screens/LoginScreen.tsx` ✅ (apiFetch 적용 완료)
+- [x] `apps/mobile/src/screens/ExploreScreen.tsx` ✅ (apiFetch 적용 완료)
