@@ -72,12 +72,12 @@ export class ClassService {
     return db.class.findMany({
       where: {
         memberships: {
-          some: { userId: userId }, // 내 userId가 멤버십에 포함된 클래스만 검색
+          some: { userId, memberStatus: 'ACTIVE' },
         },
       },
       include: {
         memberships: {
-          where: { userId: userId }, // 반환할 때 내 멤버십 정보도 포함
+          where: { userId, memberStatus: 'ACTIVE' },
         },
       },
       orderBy: { createdAt: 'desc' },
