@@ -16,10 +16,8 @@ export class JwtAuthGuard implements CanActivate {
     }
     
     try {
-      // 2. 토큰이 유효한지 검증 (비밀번호는 auth.module.ts에 적은 것과 일치해야 함)
-      const payload = await this.jwtService.verifyAsync(token, {
-        secret: 'super-secret-key-for-dev', // TODO: 🚨 실제 운영에서는 .env로 빼야 합니다!
-      });
+      // 2. 토큰 검증 — secret은 JwtModule.registerAsync에서 ConfigService로 주입됨
+      const payload = await this.jwtService.verifyAsync(token);
       
       // 3. 검증 성공 시, 요청(request) 객체에 유저 정보(payload)를 달아줍니다.
       request['user'] = payload;
