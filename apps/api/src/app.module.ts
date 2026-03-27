@@ -4,12 +4,14 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { ClassModule } from './class/class.module';
+import { ZeppModule } from './zepp/zepp.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     AuthModule,
     ClassModule,
+    ZeppModule,
   ],
   controllers: [AppController],
   providers: [AppService],

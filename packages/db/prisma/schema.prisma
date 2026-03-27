@@ -16,15 +16,16 @@ model User {
   updatedAt    DateTime   @updatedAt
   deletedAt    DateTime?
 
-  profile       UserProfile?
-  identities    UserIdentity[]
-  memberships   ClassMembership[]
-  activity      ActivityRecord[]
-  Class         Class[]
-  TrainingEvent TrainingEvent[]
-  CoachFeedback CoachFeedback[]
-  Post          Post[]
-  Comment       Comment[]
+  profile          UserProfile?
+  identities       UserIdentity[]
+  memberships      ClassMembership[]
+  activity         ActivityRecord[]
+  Class            Class[]
+  TrainingEvent    TrainingEvent[]
+  CoachFeedback    CoachFeedback[]
+  Post             Post[]
+  Comment          Comment[]
+  zeppCredential   ZeppCredential?
 }
 
 model UserProfile {
@@ -222,7 +223,21 @@ model ActivityRecord {
   feedback  CoachFeedback[]
   createdAt DateTime        @default(now())
 
+  @@unique([userId, provider, externalId])
   @@index([userId, startedAt])
+}
+
+/// Zepp Health OAuth 토큰 저장소
+model ZeppCredential {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id])
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  zeppUserId   String?  // Zepp 내부 사용자 ID (동기화 시 사용)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model CoachFeedback {
@@ -388,7 +403,7 @@ enum ProgressStatus {
 }
 
 enum ActivityProvider {
-  AMAZIFIT
+  AMAZFIT
   GARMIN
   APPLE
   SAMSUNG
